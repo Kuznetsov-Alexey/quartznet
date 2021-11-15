@@ -1448,7 +1448,14 @@ namespace Quartz.Impl.AdoJobStore
         {
             try
             {
-                string ts = await Delegate.SelectTriggerState(conn, triggerKey, cancellationToken).ConfigureAwait(false);
+                string ts = await Delegate.SelectFiredTriggerState(conn, triggerKey, cancellationToken).ConfigureAwait(false);
+
+                if(ts.Equals(StateExecuting))
+                {
+                    return TriggerState.Fired;
+                }
+
+                ts = await Delegate.SelectTriggerState(conn, triggerKey, cancellationToken).ConfigureAwait(false);
 
                 if (ts == null)
                 {

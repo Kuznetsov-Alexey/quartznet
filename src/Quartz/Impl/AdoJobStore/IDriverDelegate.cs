@@ -893,6 +893,18 @@ namespace Quartz.Impl.AdoJobStore
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Select a fired trigger's state value
+        /// </summary>
+        /// <param name="conn">The DB Connection.</param>
+        /// <param name="triggerKey">The key identifying the fired trigger.</param>
+        /// <param name="cancellationToken">The cancellation instruction.</param>
+        /// <returns>The <see cref="ITrigger" /> object.</returns>
+        Task<string> SelectFiredTriggerState(
+            ConnectionAndTransactionHolder conn,
+            TriggerKey triggerKey,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Select the states of all fired-trigger records for a given job, or job
         /// group if job name is <see langword="null" />.
         /// </summary>

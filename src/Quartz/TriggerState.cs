@@ -36,6 +36,14 @@ namespace Quartz
         Paused,
 
         /// <summary>
+        /// Indicates that the <see cref="ITrigger"/> is in the "fired" state.
+        /// </summary>
+        /// <remarks>
+        /// "Fired" indicates that the trigger was fired and task now is processing.
+        /// </remarks>
+        Fired,
+
+        /// <summary>
         /// Indicates that the <see cref="ITrigger" /> is in the "complete" state.
         /// </summary>
         /// <remarks>

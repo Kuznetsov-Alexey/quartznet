@@ -1144,6 +1144,23 @@ namespace Quartz.Impl.AdoJobStore
         }
 
         /// <inheritdoc />
+        public virtual async Task<string> SelectFiredTriggerState(
+            ConnectionAndTransactionHolder conn,
+            TriggerKey triggerKey,
+            CancellationToken cancellationToken = default)
+        {
+            using var cmd = PrepareCommand(conn, ReplaceTablePrefix(SqlSelectFiredTriggerState));
+
+            AddCommandParameter(cmd, "schedulerName", schedName);
+            AddCommandParameter(cmd, "triggerName", triggerKey.Name);
+            AddCommandParameter(cmd, "triggerGroup", triggerKey.Group);
+
+            var state = (string?)await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            return state ?? string.Empty;
+        }
+
+        /// <inheritdoc />
         public virtual async Task<IReadOnlyCollection<FiredTriggerRecord>> SelectFiredTriggerRecords(
             ConnectionAndTransactionHolder conn,
             string triggerName,

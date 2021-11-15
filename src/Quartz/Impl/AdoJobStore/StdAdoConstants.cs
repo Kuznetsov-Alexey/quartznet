@@ -128,6 +128,9 @@ namespace Quartz.Impl.AdoJobStore
         public static readonly string SqlSelectFiredTrigger =
             $"SELECT * FROM {TablePrefixSubst}{TableFiredTriggers} WHERE {ColumnSchedulerName} = @schedulerName AND {ColumnTriggerName} = @triggerName AND {ColumnTriggerGroup} = @triggerGroup";
 
+        public static readonly string SqlSelectFiredTriggerState =
+           $"SELECT {ColumnEntryState} FROM {TablePrefixSubst}{TableFiredTriggers} WHERE {ColumnSchedulerName} = @schedulerName AND {ColumnTriggerName} = @triggerName AND {ColumnTriggerGroup} = @triggerGroup";
+
         public static readonly string SqlSelectFiredTriggerGroup =
             $"SELECT * FROM {TablePrefixSubst}{TableFiredTriggers} WHERE {ColumnSchedulerName} = @schedulerName AND {ColumnTriggerGroup} = @triggerGroup";
 
