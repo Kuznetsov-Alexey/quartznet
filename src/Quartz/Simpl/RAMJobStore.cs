@@ -374,13 +374,15 @@ namespace Quartz.Simpl
                 // make sure there are no collisions...
                 if (!replace)
                 {
-                    foreach (IJobDetail job in triggersAndJobs.Keys)
+                    foreach (var triggersByJob in triggersAndJobs)
                     {
+                        var job = triggersByJob.Key;
+
                         if (jobsByKey.ContainsKey(job.Key))
                         {
                             throw new ObjectAlreadyExistsException(job);
                         }
-                        foreach (ITrigger trigger in triggersAndJobs[job])
+                        foreach (ITrigger trigger in triggersByJob.Value)
                         {
                             if (triggersByKey.ContainsKey(trigger.Key))
                             {
@@ -390,10 +392,10 @@ namespace Quartz.Simpl
                     }
                 }
                 // do bulk add...
-                foreach (IJobDetail job in triggersAndJobs.Keys)
+                foreach (var triggersByJob in triggersAndJobs)
                 {
-                    StoreJobInternal(job, true);
-                    foreach (ITrigger trigger in triggersAndJobs[job])
+                    StoreJobInternal(triggersByJob.Key, true);
+                    foreach (ITrigger trigger in triggersByJob.Value)
                     {
                         StoreTriggerInternal((IOperableTrigger) trigger, true);
                     }
@@ -453,7 +455,7 @@ namespace Quartz.Simpl
                     RemoveTriggerInternal(newTrigger.Key, removeOrphanedJob: false);
                 }
 
-                if (RetrieveJobInternal(newTrigger.JobKey) == null)
+                if (!CheckExistsInternal(newTrigger.JobKey))
                 {
                     throw new JobPersistenceException("The job (" + newTrigger.JobKey +
                                                       ") referenced by the trigger does not exist.");
@@ -545,7 +547,7 @@ namespace Quartz.Simpl
                     {
                         JobWrapper jw = jobsByKey[tw.JobKey];
                         var trigs = GetTriggersForJobInternal(tw.JobKey);
-                        if ((trigs == null || trigs.Count == 0) && !jw.JobDetail.Durable)
+                        if (trigs.Length == 0 && !jw.JobDetail.Durable)
                         {
                             if (RemoveJobInternal(jw.Key))
                             {
@@ -682,6 +684,19 @@ namespace Quartz.Simpl
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(jobsByKey.ContainsKey(jobKey));
+        }
+
+        /// <summary>
+        /// Determine whether a <see cref="IJob"/> with the given identifier already
+        /// exists within the scheduler.
+        /// </summary>
+        /// <param name="jobKey">the identifier to check for</param>
+        /// <returns>
+        /// <see langword="true"/> if a job exists with the given identifier; otherwise <see langword="false"/>.
+        /// </returns>
+        private bool CheckExistsInternal(JobKey jobKey)
+        {
+            return jobsByKey.ContainsKey(jobKey);
         }
 
         /// <summary>
@@ -896,14 +911,14 @@ namespace Quartz.Simpl
             GroupMatcher<JobKey> matcher,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(GetJobKeysInternal(matcher));
+            return Task.FromResult<IReadOnlyCollection<JobKey>>(GetJobKeysInternal(matcher));
         }
 
-        private IReadOnlyCollection<JobKey> GetJobKeysInternal(GroupMatcher<JobKey> matcher)
+        private HashSet<JobKey> GetJobKeysInternal(GroupMatcher<JobKey> matcher)
         {
             lock (lockObject)
             {
-                HashSet<JobKey>? outList = null;
+                HashSet<JobKey> outList = new HashSet<JobKey>();
                 StringOperator op = matcher.CompareWithOperator;
                 string compareToValue = matcher.CompareToValue;
 
@@ -912,8 +927,6 @@ namespace Quartz.Simpl
                     jobsByGroup.TryGetValue(compareToValue, out var grpMap);
                     if (grpMap != null)
                     {
-                        outList = new HashSet<JobKey>();
-
                         foreach (JobWrapper jw in grpMap.Values)
                         {
                             if (jw != null)
@@ -929,10 +942,6 @@ namespace Quartz.Simpl
                     {
                         if (op.Evaluate(entry.Key, compareToValue) && entry.Value != null)
                         {
-                            if (outList == null)
-                            {
-                                outList = new HashSet<JobKey>();
-                            }
                             foreach (JobWrapper jobWrapper in entry.Value.Values)
                             {
                                 if (jobWrapper != null)
@@ -943,7 +952,7 @@ namespace Quartz.Simpl
                         }
                     }
                 }
-                return outList ?? new HashSet<JobKey>();
+                return outList;
             }
         }
 
@@ -1049,25 +1058,25 @@ namespace Quartz.Simpl
             JobKey jobKey,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(GetTriggersForJobInternal(jobKey));
+            return Task.FromResult<IReadOnlyCollection<IOperableTrigger>>(GetTriggersForJobInternal(jobKey));
         }
 
-        private IReadOnlyCollection<IOperableTrigger> GetTriggersForJobInternal(JobKey jobKey)
+        private IOperableTrigger[] GetTriggersForJobInternal(JobKey jobKey)
         {
             lock (lockObject)
             {
                 if (triggersByJob.TryGetValue(jobKey, out var jobList))
                 {
-                    var trigList = new List<IOperableTrigger>(jobList.Count);
-                    foreach (var tw in jobList)
+                    var trigList = new IOperableTrigger[jobList.Count];
+                    for (var i = 0; i < jobList.Count; i++)
                     {
-                        trigList.Add((IOperableTrigger) tw.Trigger.Clone());
+                        trigList[i] = (IOperableTrigger) jobList[i].Trigger.Clone();
                     }
                     return trigList;
                 }
             }
 
-            return new List<IOperableTrigger>();
+            return Array.Empty<IOperableTrigger>();
         }
 
         /// <summary>
@@ -1083,6 +1092,23 @@ namespace Quartz.Simpl
                 {
                     return new List<TriggerWrapper>(jobList);
                 }
+            }
+
+            return new List<TriggerWrapper>();
+        }
+
+        /// <summary>
+        /// Gets the trigger wrappers for job.
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// This method should only be executed while holding the instance level lock.
+        /// </remarks>
+        private List<TriggerWrapper> GetTriggerWrappersForJobInternal(JobKey jobKey)
+        {
+            if (triggersByJob.TryGetValue(jobKey, out var jobList))
+            {
+                return jobList;
             }
 
             return new List<TriggerWrapper>();
@@ -1731,8 +1757,7 @@ namespace Quartz.Simpl
 
                     if (job.ConcurrentExecutionDisallowed)
                     {
-                        IEnumerable<TriggerWrapper> trigs = GetTriggerWrappersForJob(job.Key);
-                        foreach (TriggerWrapper ttw in trigs)
+                        foreach (TriggerWrapper ttw in GetTriggerWrappersForJobInternal(job.Key))
                         {
                             if (ttw.state == InternalTriggerState.Waiting)
                             {
@@ -1800,8 +1825,8 @@ namespace Quartz.Simpl
                     if (jd.ConcurrentExecutionDisallowed)
                     {
                         blockedJobs.Remove(jd.Key);
-                        IEnumerable<TriggerWrapper> trigs = GetTriggerWrappersForJob(jd.Key);
-                        foreach (TriggerWrapper ttw in trigs)
+
+                        foreach (TriggerWrapper ttw in GetTriggerWrappersForJobInternal(jd.Key))
                         {
                             if (ttw.state == InternalTriggerState.Blocked)
                             {
@@ -1906,13 +1931,16 @@ namespace Quartz.Simpl
         public bool Clustered => false;
 
         public virtual TimeSpan GetAcquireRetryDelay(int failureCount) => TimeSpan.FromMilliseconds(20);
-        
+
         /// <summary>
         /// Sets the state of all triggers of job to specified state.
         /// </summary>
+        /// <remarks>
+        /// This method should only be executed while holding the instance level lock.
+        /// </remarks>
         protected virtual void SetAllTriggersOfJobToState(JobKey jobKey, InternalTriggerState state)
         {
-            foreach (TriggerWrapper tw in GetTriggerWrappersForJob(jobKey))
+            foreach (TriggerWrapper tw in GetTriggerWrappersForJobInternal(jobKey))
             {
                 tw.state = state;
                 if (state != InternalTriggerState.Waiting)
